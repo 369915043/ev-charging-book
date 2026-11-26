@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E8A5F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="电车记账">
+<title>电车记账</title>
+<style>
+/* SECTION: base */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:#F4F6F5;color:#1C2B24;-webkit-font-smoothing:antialiased;
+}
+.app{max-width:560px;margin:0 auto;min-height:100%;padding-bottom:calc(76px + env(safe-area-inset-bottom));position:relative}
+h2.sec{font-size:17px;margin:18px 16px 10px}
+.page{display:none}
+.page.active{display:block}
+.muted{color:#7A8A80;font-size:12px}
+.num{font-variant-numeric:tabular-nums}
+
+/* SECTION: header */
+.topbar{
+  position:sticky;top:0;z-index:5;
+  background:linear-gradient(135deg,#0E8A5F,#0AA57C);
+  color:#fff;padding:calc(14px + env(safe-area-inset-top)) 16px 14px;
+  border-radius:0 0 18px 18px;
+}
+.topbar .t{font-size:19px;font-weight:700}
+.topbar .s{font-size:12px;opacity:.85;margin-top:2px}
+
+/* SECTION: cards & stats */
+.card{background:#fff;border-radius:14px;margin:10px 16px;padding:14px 16px;box-shadow:0 1px 4px rgba(20,50,35,.06)}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px 10px}
+.stat .k{font-size:12px;color:#7A8A80}
+.stat .v{font-size:20px;font-weight:700;margin-top:2px}
+.stat .u{font-size:11px;color:#9AA8A0;margin-left:3px;font-weight:400}
+.hint{font-size:12px;color:#7A8A80;margin-top:10px;display:flex;gap:6px;align-items:flex-start}
+
+/* SECTION: record list */
+.rec{display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid #F0F3F1;cursor:pointer}
+.rec:last-child{border-bottom:none}
+.rec .ic{width:38px;height:38px;border-radius:50%;background:#E7F4EE;color:#0E8A5F;display:flex;align-items:center;justify-content:center;font-size:16px;flex:none}
+.rec .mid{flex:1;min-width:0}
+.rec .l1{font-size:14px;font-weight:600;display:flex;gap:8px;align-items:center}
+.rec .l1 .tag{font-size:10px;font-weight:500;background:#EFF3F0;color:#6B7B71;border-radius:4px;padding:1px 6px}
+.rec .l2{font-size:12px;color:#7A8A80;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rec .rt{text-align:right;flex:none}
+.rec .amt{font-size:15px;font-weight:700}
+.rec .sub{font-size:11px;color:#7A8A80;margin-top:2px}
+.rec .warn{color:#D97706}
+
+/* SECTION: buttons & fab */
+.fab{
+  position:fixed;right:calc(20px + env(safe-area-inset-right));bottom:calc(88px + env(safe-area-inset-bottom));z-index:6;
+  width:54px;height:54px;border-radius:50%;border:none;
+  background:linear-gradient(135deg,#0E8A5F,#0AA57C);color:#fff;font-size:28px;line-height:1;
+  box-shadow:0 6px 16px rgba(14,138,95,.4);cursor:pointer;
+}
+.btn{display:block;width:100%;padding:13px;border-radius:12px;border:none;font-size:16px;font-weight:600;cursor:pointer}
+.btn.primary{background:#0E8A5F;color:#fff}
+.btn.ghost{background:#EFF3F0;color:#31463B}
+.btn.danger{background:#FDECEA;color:#C0392B}
+.btnrow{display:flex;gap:10px;margin-top:14px}
+.linkbtn{background:none;border:none;color:#0E8A5F;font-size:14px;cursor:pointer;padding:6px 0}
+
+/* SECTION: tabbar */
+.tabbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:7;
+  background:rgba(255,255,255,.96);backdrop-filter:blur(8px);
+  border-top:1px solid #E8EDE9;
+  display:flex;padding-bottom:env(safe-area-inset-bottom);
+  max-width:560px;margin:0 auto;
+}
+.tabbar button{
+  flex:1;background:none;border:none;padding:8px 0 6px;cursor:pointer;
+  color:#9AA8A0;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px;
+}
+.tabbar button .ti{font-size:20px;line-height:1}
+.tabbar button.on{color:#0E8A5F;font-weight:600}
+
+/* SECTION: modal & form */
+.mask{position:fixed;inset:0;background:rgba(15,30,22,.45);z-index:20;display:none}
+.mask.open{display:block}
+.sheet{
+  position:fixed;left:50%;bottom:0;transform:translateX(-50%);z-index:21;width:100%;max-width:560px;
+  background:#F4F6F5;border-radius:18px 18px 0 0;max-height:88vh;overflow-y:auto;
+  display:none;padding-bottom:calc(16px + env(safe-area-inset-bottom));
+}
+.sheet.open{display:block}
+.sheet .sh{position:sticky;top:0;background:#F4F6F5;display:flex;align-items:center;justify-content:space-between;padding:14px 16px 6px;z-index:2}
+.sheet .sh .tt{font-size:17px;font-weight:700}
+.sheet .x{background:none;border:none;font-size:20px;color:#7A8A80;cursor:pointer;padding:4px 8px}
+.form .row{display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid #EDF1EE}
+.form .row:last-child{border-bottom:none}
+.form label{font-size:15px;flex:none;min-width:88px}
+.form input[type=text],.form input[type=number],.form input[type=date],.form select,.form textarea{
+  flex:1;min-width:0;border:none;background:#fff;border-radius:8px;padding:10px 12px;
+  font-size:16px;outline:none;appearance:none;-webkit-appearance:none;color:#1C2B24;
+}
+.form textarea{resize:vertical;min-height:44px;font-family:inherit}
+.form .unit{flex:none;font-size:13px;color:#7A8A80;width:52px}
+.form .check{display:flex;align-items:center;gap:8px;padding:11px 2px}
+.form .check input{width:20px;height:20px;accent-color:#0E8A5F}
+.calc-tip{font-size:12px;color:#0E8A5F;background:#E7F4EE;border-radius:8px;padding:8px 10px;margin-top:8px}
+
+/* SECTION: bill */
+.bill{padding:4px 0}
+.bill .bh{display:flex;justify-content:space-between;align-items:baseline}
+.bill .bm{font-size:15px;font-weight:700}
+.bill .bc{font-size:18px;font-weight:800;color:#D97706}
+.bill .btags{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px}
+.bill .bt{font-size:12px;color:#7A8A80}
+.bill .bt b{color:#31463B;font-weight:600}
+
+/* SECTION: chart */
+.chart-wrap{width:100%;overflow:hidden}
+.chart-wrap svg{display:block;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:12px;color:#5B6B62}
+.legend .dot{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:4px;vertical-align:baseline}
+.empty{margin:60px 16px;text-align:center;color:#9AA8A0}
+.empty .big{font-size:44px;margin-bottom:12px}
+.empty p{font-size:14px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SECTION: header -->
+  <div class="topbar">
+    <div class="t" id="hdrTitle">电车记账</div>
+    <div class="s" id="hdrSub">充电 · 里程 · 电耗 · 电费，本机存储</div>
+  </div>
+
+  <!-- SECTION: page records -->
+  <div class="page active" id="page-records">
+    <div class="card">
+      <div class="statgrid" id="sumGrid"></div>
+      <div class="hint" id="sumHint"><span>⚡</span><span id="sumHintText"></span></div>
+    </div>
+    <div id="recListWrap"></div>
+  </div>
+
+  <!-- SECTION: page stats -->
+  <div class="page" id="page-stats">
+    <div id="statsBody"></div>
+  </div>
+
+  <!-- SECTION: page bills -->
+  <div class="page" id="page-bills">
+    <div class="card">
+      <div class="statgrid" id="billTotal"></div>
+    </div>
+    <div id="billListWrap"></div>
+    <div class="card">
+      <h2 style="font-size:15px;margin-bottom:8px">数据备份</h2>
+      <p class="muted" style="line-height:1.6">浏览器/手机存储可能被清理，建议每月导出一次 CSV 备份到网盘或微信收藏。</p>
+      <div class="btnrow">
+        <button class="btn primary" id="btnExport">导出 CSV</button>
+        <button class="btn ghost" id="btnImport">导入备份</button>
+      </div>
+      <input type="file" id="fileImport" accept=".csv,text/csv" style="display:none">
+    </div>
+  </div>
+
+  <!-- SECTION: page mine -->
+  <div class="page" id="page-mine">
+    <div class="card form">
+      <h2 style="font-size:15px;margin-bottom:6px">车辆设置</h2>
+      <div class="row"><label>车辆名称</label><input type="text" id="setVehName" placeholder="如：我的电车"></div>
+      <div class="row"><label>电池容量</label><input type="number" id="setBattery" inputmode="decimal" placeholder="如 90"><span class="unit">kWh</span></div>
+      <div class="row"><label>默认电价</label><input type="number" id="setPrice" inputmode="decimal" placeholder="如 1.5"><span class="unit">元/kWh</span></div>
+      <div class="row"><label>起点里程</label><input type="number" id="setStartOdo" inputmode="decimal" placeholder="如 12000"><span class="unit">km</span></div>
+      <p class="muted" style="margin-top:8px;line-height:1.6">起点里程 = 开始记账那天的里程表读数。若忘记设置，第一笔记录默认作为基准、不计里程。</p>
+      <button class="btn primary" id="btnSaveSettings" style="margin-top:12px">保存设置</button>
+    </div>
+    <div class="card">
+      <h2 style="font-size:15px;margin-bottom:8px">使用说明</h2>
+      <p class="muted" style="line-height:1.8" id="usageText"></p>
+    </div>
+    <div class="card">
+      <button class="btn danger" id="btnClear">清空全部数据</button>
+    </div>
+  </div>
+
+  <!-- SECTION: tabbar -->
+  <div class="tabbar" id="tabbar">
+    <button data-page="records" class="on"><span class="ti">📒</span><span>记录</span></button>
+    <button data-page="stats"><span class="ti">📈</span><span>统计</span></button>
+    <button data-page="bills"><span class="ti">🧾</span><span>账单</span></button>
+    <button data-page="mine"><span class="ti">🚗</span><span>车辆</span></button>
+  </div>
+
+  <button class="fab" id="btnAdd" aria-label="记一笔">＋</button>
+
+  <!-- SECTION: record form sheet -->
+  <div class="mask" id="mask"></div>
+  <div class="sheet" id="recSheet">
+    <div class="sh"><span class="tt" id="recSheetTitle">记一笔充电</span><button class="x" id="recClose">✕</button></div>
+    <div class="card form" style="margin-top:0">
+      <div class="row"><label>充电日期</label><input type="date" id="fDate"></div>
+      <div class="row"><label>充电方式</label>
+        <select id="fKind">
+          <option value="fast">直流快充</option>
+          <option value="ac">交流慢充</option>
+          <option value="home">家充桩</option>
+          <option value="swap">换电</option>
+        </select>
+      </div>
+      <div class="row"><label>里程表读数</label><input type="number" id="fOdo" inputmode="decimal" placeholder="必填"><span class="unit">km</span></div>
+      <div class="row"><label>充电电量</label><input type="number" id="fEnergy" inputmode="decimal" placeholder="充电桩小票上的量"><span class="unit">kWh</span></div>
+      <div class="row"><label>本次花费</label><input type="number" id="fCost" inputmode="decimal" placeholder="含服务费"><span class="unit">元</span></div>
+      <div class="check"><input type="checkbox" id="fUseSOC"><label for="fUseSOC" style="min-width:0">没记电量，用充前后电量%估算（需设置电池容量）</label></div>
+      <div id="socRows" style="display:none">
+        <div class="row"><label>充电前电量</label><input type="number" id="fSoc0" inputmode="decimal" placeholder="如 20"><span class="unit">%</span></div>
+        <div class="row"><label>充电后电量</label><input type="number" id="fSoc1" inputmode="decimal" placeholder="如 90"><span class="unit">%</span></div>
+      </div>
+      <div class="row"><label>充电站</label><input type="text" id="fLoc" placeholder="选填"></div>
+      <div class="row"><label>备注</label><input type="text" id="fNote" placeholder="选填"></div>
+      <div class="calc-tip" id="formTip" style="display:none"></div>
+      <button class="btn primary" id="btnSaveRec" style="margin-top:14px">保存</button>
+    </div>
+  </div>
+
+  <!-- SECTION: type sheet -->
+  <div class="sheet" id="typeSheet">
+    <div class="sh"><span class="tt">记什么？</span><button class="x" id="typeClose">✕</button></div>
+    <div class="card" style="margin-top:0">
+      <button class="btn primary" id="pickCharge">⚡ 记充电</button>
+      <button class="btn ghost" id="pickBill" style="margin-top:10px">🧾 记家电电费账单</button>
+      <p class="muted" style="margin-top:10px;line-height:1.6">电费账单：按国家电网每月账单填本期电量、电费，可附账单截图存底，自动并入月度账单和每公里成本。</p>
+    </div>
+  </div>
+
+  <!-- SECTION: bill form sheet -->
+  <div class="sheet" id="billSheet">
+    <div class="sh"><span class="tt" id="billSheetTitle">记电费账单</span><button class="x" id="billClose">✕</button></div>
+    <div class="card form" style="margin-top:0">
+      <div class="row"><label>账单月份</label><input type="month" id="bMonth"></div>
+      <div class="row"><label>本期电量</label><input type="number" id="bEnergy" inputmode="decimal" placeholder="账单上的本期电量"><span class="unit">kWh</span></div>
+      <div class="row"><label>本期电费</label><input type="number" id="bCost" inputmode="decimal" placeholder="账单上的本期电费"><span class="unit">元</span></div>
+      <div class="row"><label>高峰电量</label><input type="number" id="bPeak" inputmode="decimal" placeholder="选填"><span class="unit">kWh</span></div>
+      <div class="row"><label>低谷电量</label><input type="number" id="bValley" inputmode="decimal" placeholder="选填"><span class="unit">kWh</span></div>
+      <div class="row"><label>账单截图</label><input type="file" id="bImg" accept="image/*"></div>
+      <img id="bImgPrev" alt="" style="display:none;width:100%;border-radius:10px;margin-top:10px">
+      <div class="row"><label>户号/地点</label><input type="text" id="bLoc" placeholder="如：国家电网 家庭用电"></div>
+      <div class="row"><label>备注</label><input type="text" id="bNote" placeholder="选填"></div>
+      <div class="calc-tip" id="billTip" style="display:none"></div>
+      <button class="btn primary" id="btnSaveBill" style="margin-top:14px">保存</button>
+    </div>
+  </div>
+
+  <!-- SECTION: bill detail sheet -->
+  <div class="sheet" id="billDetailSheet">
+    <div class="sh"><span class="tt">电费账单详情</span><button class="x" id="billDetailClose">✕</button></div>
+    <div class="card" id="billDetailBody" style="margin-top:0"></div>
+    <div class="card" style="margin-top:0">
+      <div class="btnrow">
+        <button class="btn ghost" id="btnEditBill">编辑</button>
+        <button class="btn danger" id="btnDelBill">删除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION: detail sheet -->
+  <div class="sheet" id="detailSheet">
+    <div class="sh"><span class="tt">记录详情</span><button class="x" id="detailClose">✕</button></div>
+    <div class="card" id="detailBody" style="margin-top:0"></div>
+    <div class="card" style="margin-top:0">
+      <div class="btnrow">
+        <button class="btn ghost" id="btnEditRec">编辑</button>
+        <button class="btn danger" id="btnDelRec">删除</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>
+'use strict';
+/* SECTION: storage & model */
+var LS_KEY='evlo…g_v1';
+var KINDS={fast:{n:'快充',i:'⚡'},ac:{n:'慢充',i:'🔌'},home:{n:'家充',i:'🏠'},swap:{n:'换电',i:'🔁'}};
+var DB=null;
+
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8);}
+function todayStr(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function pad(n){return n<10?'0'+n:''+n;}
+function load(){
+  try{var raw=localStorage.getItem(LS_KEY);if(raw)DB=JSON.parse(raw);}catch(e){DB=null;}
+  if(!DB||!DB.vehicles||!DB.vehicles.length){
+    var v={id:uid(),name:'我的电车',battery:0,price:1.5,startOdo:0};
+    DB={vid:v.id,vehicles:[v],records:[],bills:[]};save();
+  }
+  if(!DB.bills)DB.bills=[];
+}
+function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(DB));}catch(e){alert('保存失败：浏览器存储不可用');}}
+function veh(){for(var i=0;i<DB.vehicles.length;i++){if(DB.vehicles[i].id===DB.vid)return DB.vehicles[i];}return DB.vehicles[0];}
+function recs(){var v=veh();return DB.records.filter(function(r){return r.vid===v.id;});}
+function bills(){var v=veh();return DB.bills.filter(function(b){return b.vid===v.id;});}
+/* SECTION: metrics（口径：里程表差值→行驶里程→百公里电耗/每公里成本） */
+function metrics(){
+  var v=veh();
+  var list=recs().slice().sort(function(a,b){
+    if(a.odo!==b.odo)return a.odo-b.odo;
+    return a.date<b.date?-1:1;
+  });
+  var prev=v.startOdo>0&&list.length?v.startOdo:(list.length?list[0].odo:0);
+  var first=v.startOdo<=0;
+  var out=[];
+  for(var i=0;i<list.length;i++){
+    var r=list[i],energy=r.energy,est=false;
+    if(energy<=0&&r.soc&&v.battery>0){
+      energy=v.battery*Math.max(0,r.s1-r.s0)/100;est=energy>0;
+    }
+    var invalid=(!first&&r.odo<=prev)||(first&&i===0);
+    var dist=invalid?0:r.odo-prev;
+    out.push({
+      r:r,energy:energy,est:est,dist:dist,invalid:invalid,
+      cons:(!invalid&&energy>0)?energy/dist*100:null,
+      cpk:(!invalid&&r.cost>0)?r.cost/dist:null
+    });
+    if(r.odo>prev)prev=r.odo;
+  }
+  return out;
+}
+function summary(ms){
+  var s={n:ms.length,dist:0,energy:0,cost:0,billCost:0,billEnergy:0,billN:0};
+  for(var i=0;i<ms.length;i++){s.dist+=ms[i].dist;s.energy+=ms[i].energy;s.cost+=ms[i].r.cost;}
+  var bs=bills();
+  for(var j=0;j<bs.length;j++){s.billCost+=bs[j].cost;s.billEnergy+=bs[j].energy;}
+  s.billN=bs.length;
+  s.total=s.cost+s.billCost;
+  s.cons=s.dist>0&&s.energy>0?s.energy/s.dist*100:null;
+  s.cpk=s.dist>0&&s.total>0?s.total/s.dist:null;
+  var v=veh();s.range=(s.cons&&v.battery>0)?v.battery/s.cons*100:null;
+  return s;
+}
+function monthBuckets(ms){
+  var map={},keys=[];
+  function key(k){if(!map[k]){map[k]={energy:0,cost:0,dist:0,billEnergy:0,billCost:0};keys.push(k);}}
+  for(var i=0;i<ms.length;i++){
+    var k=ms[i].r.date.slice(0,7);key(k);
+    map[k].energy+=ms[i].energy;map[k].cost+=ms[i].r.cost;map[k].dist+=ms[i].dist;
+  }
+  bills().forEach(function(b){
+    key(b.month);map[b.month].billEnergy+=b.energy;map[b.month].billCost+=b.cost;
+  });
+  keys.sort();
+  return keys.map(function(k){
+    var m=map[k];
+    return {k:k,energy:m.energy,cost:m.cost,dist:m.dist,billEnergy:m.billEnergy,billCost:m.billCost,
+      total:m.cost+m.billCost,
+      cons:(m.dist>0&&m.energy>0)?m.energy/m.dist*100:null};
+  });
+}
+
+/* SECTION: format */
+function n1(x){return (Math.round(x*10)/10).toFixed(1);}
+function n2(x){return x.toFixed(2);}
+function n3(x){return x.toFixed(3);}
+function money(x){return '¥'+n2(x);}
+function dlabel(ds){var p=ds.split('-');return p.length>=3?(+p[1])+'月'+(+p[2])+'日':ds;}
+function mlabel(k){var p=k.split('-');return (+p[0])+'年'+(+p[1])+'月';}
+
+/* SECTION: DOM helpers（防转义：动态值一律 textContent/属性赋值注入） */
+function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;}
+function $(id){return document.getElementById(id);}
+function svgEl(t,attrs){var e=document.createElementNS('http://www.w3.org/2000/svg',t);for(var k in attrs)e.setAttribute(k,attrs[k]);return e;}
+function svgText(x,y,str,size,color,anchor){var t=svgEl('text',{x:x,y:y,'font-size':size||10,fill:color||'#7A8A80','text-anchor':anchor||'middle'});t.textContent=str;return t;}
+
+/* SECTION: render 记录页 */
+function renderRecords(){
+  var ms=metrics(),s=summary(ms),g=$('sumGrid');g.innerHTML='';
+  g.appendChild(statCell('总花费',money(s.total),s.n+' 次充电'+(s.billN?'+'+s.billN+' 账单':'')));
+  g.appendChild(statCell('行驶里程',n1(s.dist),'km'));
+  g.appendChild(statCell('百公里电耗',s.cons?n1(s.cons):'—','kWh/100km'));
+  g.appendChild(statCell('每公里电费',s.cpk?n3(s.cpk):'—','元/km'));
+  var hint=$('sumHintText');
+  var hintParts=[];
+  if(s.range)hintParts.push('满电续航约 '+n1(s.range)+' km');
+  if(s.billCost>0)hintParts.push('家充电费已计入 ¥'+n2(s.billCost));
+  if(!hintParts.length)hintParts.push('在「车辆」页填写电池容量后，可估算满电续航');
+  hint.textContent=hintParts.join(' · ');
+
+  var wrap=$('recListWrap');wrap.innerHTML='';
+  if(!ms.length&&!bills().length){wrap.appendChild(emptyBlock('🔋','还没有记录','点右下角「＋」记第一笔：填里程表读数、充电量、花费，\n电耗和每公里电费会自动算出来。'));return;}
+  var card=el('div','card');
+  // 合并列表：充电记录按里程序、账单按月份，统一按"展示日期"倒序排
+  var items=[];
+  ms.forEach(function(m){items.push({t:'c',d:m.r.date,m:m});});
+  bills().forEach(function(b){items.push({t:'b',d:b.month+'-28',b:b});});
+  items.sort(function(a,b){return a.d<b.d?1:a.d>b.d?-1:0;});
+  items.forEach(function(it){
+    if(it.t==='b'){card.appendChild(billRow(it.b));return;}
+    var m=it.m;
+    {
+      var row=el('div','rec');
+      var ic=el('div','ic',(KINDS[m.r.kind]||KINDS.fast).i);row.appendChild(ic);
+      var mid=el('div','mid');
+      var l1=el('div','l1');l1.appendChild(el('span','',dlabel(m.r.date)));
+      l1.appendChild(el('span','tag',(KINDS[m.r.kind]||KINDS.fast).n));
+      if(m.est)l1.appendChild(el('span','tag','电量估算'));
+      mid.appendChild(l1);
+      var l2=el('div','l2');
+      var parts=[n1(m.energy)+' kWh'];
+      if(m.cons!=null)parts.push('电耗 '+n1(m.cons)+' kWh/100km');
+      if(m.r.loc)parts.push(m.r.loc);
+      l2.textContent=parts.join(' · ');
+      mid.appendChild(l2);row.appendChild(mid);
+      var rt=el('div','rt');
+      rt.appendChild(el('div','amt num',money(m.r.cost)));
+      var sub=el('div','sub num');
+      if(m.invalid)sub.textContent='里程待核对';else if(m.dist>0)sub.textContent=n1(m.dist)+' km';else sub.textContent='—';
+      if(m.invalid)sub.classList.add('warn');
+      rt.appendChild(sub);row.appendChild(rt);
+      row.addEventListener('click',function(){openDetail(m.r.id);});
+      card.appendChild(row);
+    }
+  });
+  wrap.appendChild(card);
+}
+function billRow(b){
+  var row=el('div','rec');
+  row.appendChild(el('div','ic','🧾'));
+  var mid=el('div','mid');
+  var l1=el('div','l1');
+  l1.appendChild(el('span','',mlabel(b.month)));
+  l1.appendChild(el('span','tag','家电账单'));
+  mid.appendChild(l1);
+  var parts=[n1(b.energy)+' kWh'];
+  if(b.price>0)parts.push('电价 '+n3(b.price)+' 元/kWh');
+  if(b.valley>0)parts.push('低谷占'+Math.round(b.valley/Math.max(b.energy,0.001)*100)+'%');
+  if(b.loc)parts.push(b.loc);
+  mid.appendChild(el('div','l2',parts.join(' · ')));
+  row.appendChild(mid);
+  var rt=el('div','rt');
+  rt.appendChild(el('div','amt num',money(b.cost)));
+  rt.appendChild(el('div','sub',b.img?'含截图':'选填峰谷'));
+  row.appendChild(rt);
+  row.addEventListener('click',function(){openBillDetail(b.id);});
+  return row;
+}
+function statCell(k,v,u){
+  var c=el('div','stat');
+  c.appendChild(el('div','k',k));
+  var vv=el('div','v num');vv.appendChild(document.createTextNode(v));
+  var uu=el('span','u',u);vv.appendChild(uu);
+  c.appendChild(vv);return c;
+}
+function emptyBlock(big,p1,p2){
+  var e=el('div','empty');
+  e.appendChild(el('div','big',big));
+  e.appendChild(el('p','',p1));
+  var p=el('p','',p2);p.style.whiteSpace='pre-line';e.appendChild(p);
+  return e;
+}
+
+/* SECTION: render 统计页（纯 SVG，无外部库） */
+function niceMax(x){
+  if(x<=0)return 1;
+  var p=Math.pow(10,Math.floor(Math.log(x)/Math.LN10));
+  var f=x/p;
+  var nf=f<=1?1:f<=2?2:f<=5?5:10;
+  return nf*p;
+}
+function lineChart(vals,labels,color,fmt){
+  var W=340,H=170,L=42,R=12,T=14,B=30;
+  var svg=svgEl('svg',{viewBox:'0 0 '+W+' '+H});
+  var max=niceMax(Math.max.apply(null,vals.concat([0.0001]))*1.15);
+  var n=vals.length;
+  var x=function(i){return n===1?(L+(W-R-L)/2):L+(W-R-L)*i/(n-1);};
+  var y=function(v){return T+(H-T-B)*(1-v/max);};
+  for(var g=0;g<=4;g++){
+    var gv=max*g/4,gy=y(gv);
+    svg.appendChild(svgEl('line',{x1:L,y1:gy,x2:W-R,y2:gy,stroke:'#EDF1EE','stroke-width':1}));
+    svg.appendChild(svgText(L-6,gy+3,fmt(gv),9,'#9AA8A0','end'));
+  }
+  var pts=[];
+  for(var i=0;i<n;i++)pts.push(x(i)+','+y(vals[i]));
+  var area=color+'22';
+  if(n>1){
+    svg.appendChild(svgEl('polygon',{points:pts.join(' ')+' '+x(n-1)+','+(H-B)+' '+x(0)+','+(H-B),fill:area}));
+    svg.appendChild(svgEl('polyline',{points:pts.join(' '),fill:'none',stroke:color,'stroke-width':2.5,'stroke-linejoin':'round'}));
+  }
+  for(var j=0;j<n;j++){
+    svg.appendChild(svgEl('circle',{cx:x(j),cy:y(vals[j]),r:3.5,fill:'#fff',stroke:color,'stroke-width':2}));
+    svg.appendChild(svgText(x(j),y(vals[j])-8,fmt(vals[j]),9,'#31463B'));
+    svg.appendChild(svgText(x(j),H-10,labels[j],9,'#9AA8A0'));
+  }
+  return svg;
+}
+function barChart(vals,labels,fmt){
+  var W=340,H=170,L=42,R=12,T=14,B=30;
+  var svg=svgEl('svg',{viewBox:'0 0 '+W+' '+H});
+  var max=niceMax(Math.max.apply(null,vals.concat([0.0001]))*1.15);
+  var n=vals.length,band=(W-R-L)/Math.max(n,1),bw=Math.min(40,band*0.55);
+  var y=function(v){return T+(H-T-B)*(1-v/max);};
+  for(var g=0;g<=4;g++){
+    var gv=max*g/4,gy=y(gv);
+    svg.appendChild(svgEl('line',{x1:L,y1:gy,x2:W-R,y2:gy,stroke:'#EDF1EE','stroke-width':1}));
+    svg.appendChild(svgText(L-6,gy+3,fmt(gv),9,'#9AA8A0','end'));
+  }
+  for(var i=0;i<n;i++){
+    var cx=L+band*i+band/2;
+    var h=Math.max(2,H-B-y(vals[i]));
+    svg.appendChild(svgEl('rect',{x:cx-bw/2,y:y(vals[i]),width:bw,height:h,rx:4,fill:'#0E8A5F',opacity:.88}));
+    svg.appendChild(svgText(cx,y(vals[i])-6,fmt(vals[i]),9,'#31463B'));
+    svg.appendChild(svgText(cx,H-10,labels[i],9,'#9AA8A0'));
+  }
+  return svg;
+}
+function chartCard(title,cap,data){
+  var c=el('div','card');
+  c.appendChild(el('h2','',title)).setAttribute('style','font-size:15px;margin-bottom:4px');
+  c.appendChild(el('p','muted',cap));
+  var w=el('div','chart-wrap');w.appendChild(data);c.appendChild(w);
+  return c;
+}
+function renderStats(){
+  var body=$('statsBody');body.innerHTML='';
+  var ms=metrics().filter(function(m){return !m.invalid;});
+  var hasBill=bills().length>0;
+  if(ms.length<2&&!hasBill){
+    body.appendChild(emptyBlock('📈','数据还不够','至少记录 2 笔充电（或录入电费账单），才能画出电耗趋势和费用曲线。'));return;
+  }
+  var buckets=monthBuckets(ms).slice(-12);
+  var labels=buckets.map(function(b){var p=b.k.split('-');return (+p[1])+'月';});
+  var cons=buckets.map(function(b){return b.cons||0;});
+  var costs=buckets.map(function(b){return b.total;});
+  var cpk=buckets.map(function(b){return b.dist>0?b.total/b.dist:0;});
+
+  var valid=ms.filter(function(m){return m.cons!=null;});
+  var avg=valid.length?valid.reduce(function(a,m){return a+m.cons;},0)/valid.length:0;
+  if(ms.length>=2){
+    body.appendChild(chartCard('百公里电耗趋势','近 '+buckets.length+' 个月，平均 '+n1(avg)+' kWh/100km',lineChart(cons,labels,'#0E8A5F',function(v){return n1(v);})));
+  }
+  body.appendChild(chartCard('每月用车电费（含家充账单）','合计 '+money(costs.reduce(function(a,x){return a+x;},0)),barChart(costs,labels,function(v){return Math.round(v);})));
+  if(buckets.some(function(b){return b.dist>0&&b.total>0;})){
+    body.appendChild(chartCard('每公里电费','含家充电费分摊，越低越省钱',lineChart(cpk,labels,'#D97706',function(v){return v>0?n3(v):'0';})));
+  }
+
+  var kmap={},ktot=0;
+  ms.forEach(function(m){kmap[m.r.kind]=(kmap[m.r.kind]||0)+m.r.cost;ktot+=m.r.cost;});
+  var billTot=0;bills().forEach(function(b){billTot+=b.cost;});
+  var shareTot=ktot+billTot;
+  if(billTot>0){kmap.__bill=billTot;}
+  var kc=el('div','card');
+  kc.appendChild(el('h2','', '电费构成占比')).setAttribute('style','font-size:15px;margin-bottom:10px');
+  var colors={fast:'#0E8A5F',ac:'#3B9DF0',home:'#8E6FE8',swap:'#D97706',__bill:'#F0B429'};
+  var names={__bill:'家电账单'};
+  for(var k in kmap){
+    if(!kmap[k])continue;
+    var pct=shareTot?kmap[k]/shareTot*100:0;
+    var row=el('div','');
+    row.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:8px';
+    var name=el('span','',names[k]||(KINDS[k]||{n:k}).n);name.style.cssText='width:52px;font-size:13px;flex:none';
+    var bar=el('div','');bar.style.cssText='flex:1;height:8px;background:#EFF3F0;border-radius:4px;min-width:0;overflow:hidden';
+    var fill=el('div','');fill.style.cssText='height:100%;width:'+pct.toFixed(1)+'%;background:'+(colors[k]||'#0E8A5F')+';border-radius:4px';
+    bar.appendChild(fill);row.appendChild(name);row.appendChild(bar);
+    var val=el('span','',Math.round(pct)+'% '+money(kmap[k]));
+    val.style.cssText='font-size:12px;color:#7A8A80;flex:none';
+    row.appendChild(val);
+    kc.appendChild(row);
+  }
+  body.appendChild(kc);
+}
+
+/* SECTION: render 账单页 */
+function renderBills(){
+  var ms=metrics().filter(function(m){return !m.invalid;});
+  var wrap=$('billListWrap');wrap.innerHTML='';
+  var s=summary(metrics());
+  var tot=s.total;
+  var g=$('billTotal');g.innerHTML='';
+  g.appendChild(statCell('累计支出',money(tot),'充电'+money(s.cost)+' / 家充'+money(s.billCost)));
+  var avg=tot/Math.max(1,monthBuckets(ms).length);
+  g.appendChild(statCell('月均支出',money(avg),'元/月'));
+  var buckets=monthBuckets(ms);
+  if(!buckets.length){wrap.appendChild(emptyBlock('🧾','暂无账单','有充电记录或电费账单后，这里会按月汇总电费、里程和电耗。'));return;}
+  var card=el('div','card');
+  for(var i=buckets.length-1;i>=0;i--){
+    var b=buckets[i];
+    var box=el('div','bill');
+    var h=el('div','bh');
+    h.appendChild(el('span','bm',mlabel(b.k)));
+    h.appendChild(el('span','bc num',money(b.total)));
+    box.appendChild(h);
+    var tags=el('div','btags');
+    if(b.dist>0)tags.appendChild(btag('行驶',n1(b.dist)+' km'));
+    if(b.energy>0)tags.appendChild(btag('充电',n1(b.energy)+' kWh'));
+    if(b.cons!=null)tags.appendChild(btag('电耗',n1(b.cons)+' kWh/100km'));
+    if(b.dist>0)tags.appendChild(btag('成本',n3(b.total/b.dist)+' 元/km'));
+    box.appendChild(tags);
+    var det=el('div','btags');
+    if(b.cost>0)det.appendChild(btag('外部充电',money(b.cost)));
+    if(b.billCost>0)det.appendChild(btag('家电账单',money(b.billCost)+'（'+n1(b.billEnergy)+' kWh）'));
+    if(b.cost>0||b.billCost>0)box.appendChild(det);
+    card.appendChild(box);
+    if(i>0){var hr=el('div','');hr.style.cssText='border-top:1px solid #F0F3F1;margin:12px 0';card.appendChild(hr);}
+  }
+  wrap.appendChild(card);
+  // 家电账单明细管理
+  var bs=bills();
+  if(bs.length){
+    var mc=el('div','card');
+    mc.appendChild(el('h2','','电费账单明细')).setAttribute('style','font-size:15px;margin-bottom:6px');
+    bs.slice().sort(function(a,b){return a.month<b.month?1:-1;}).forEach(function(bn){
+      var row=el('div','rec');
+      var mid=el('div','mid');
+      mid.appendChild(el('div','l1',mlabel(bn.month)));
+      var s2=n1(bn.energy)+' kWh · '+n3(bn.price||bn.energy>0?bn.cost/bn.energy:0)+' 元/kWh';
+      mid.appendChild(el('div','l2',s2));
+      row.appendChild(mid);
+      var rt=el('div','rt');rt.appendChild(el('div','amt num',money(bn.cost)));row.appendChild(rt);
+      row.addEventListener('click',function(){openBillDetail(bn.id);});
+      mc.appendChild(row);
+    });
+    wrap.appendChild(mc);
+  }
+}
+function btag(k,v){
+  var t=el('span','bt');t.appendChild(document.createTextNode(k+' '));
+  var b=el('b','',v);t.appendChild(b);return t;
+}
+
+/* SECTION: render 车辆页 */
+function renderMine(){
+  var v=veh();
+  $('setVehName').value=v.name||'';
+  $('setBattery').value=v.battery>0?v.battery:'';
+  $('setPrice').value=v.price||'';
+  $('setStartOdo').value=v.startOdo>0?v.startOdo:'';
+}
+
+/* SECTION: record form */
+var editingId=null;
+function openForm(rec){
+  editingId=rec?rec.id:null;
+  $('recSheetTitle').textContent=rec?'编辑记录':'记一笔充电';
+  $('fDate').value=rec?rec.date:todayStr();
+  $('fKind').value=rec?rec.kind:'fast';
+  $('fOdo').value=rec?rec.odo:'';
+  $('fEnergy').value=rec&&rec.energy>0?rec.energy:'';
+  $('fCost').value=rec?rec.cost:'';
+  $('fUseSOC').checked=rec?!!rec.soc:false;
+  $('fSoc0').value=rec&&rec.soc?rec.s0:'';
+  $('fSoc1').value=rec&&rec.soc?rec.s1:'';
+  $('fLoc').value=rec?rec.loc||'':'';
+  $('fNote').value=rec?rec.note||'':'';
+  toggleSoc();updateTip();
+  $('detailSheet').classList.remove('open');
+  $('mask').classList.add('open');$('recSheet').classList.add('open');
+}
+function closeSheets(){
+  $('mask').classList.remove('open');
+  ['recSheet','detailSheet','typeSheet','billSheet','billDetailSheet'].forEach(function(id){$(id).classList.remove('open');});
+}
+function toggleSoc(){$('socRows').style.display=$('fUseSOC').checked?'block':'none';}
+function updateTip(){
+  var e=parseFloat($('fEnergy').value),c=parseFloat($('fCost').value),tip=$('formTip');
+  if(e>0&&c>0){tip.style.display='block';tip.textContent='折合 '+n2(c/e)+' 元/kWh（含服务费）';}
+  else tip.style.display='none';
+}
+function saveRec(){
+  var odo=parseFloat($('fOdo').value);
+  var energy=parseFloat($('fEnergy').value)||0;
+  var cost=parseFloat($('fCost').value);
+  var useSoc=$('fUseSOC').checked,s0=parseFloat($('fSoc0').value)||0,s1=parseFloat($('fSoc1').value)||0;
+  if(isNaN(odo)||odo<=0){alert('请填写充电时的里程表读数');return;}
+  if(energy<=0&&!(useSoc&&s1>s0)){alert('请填写充电电量，或勾选用前后电量%估算');return;}
+  if(isNaN(cost)||cost<0){alert('请填写本次花费（没有填 0）');return;}
+  var date=$('fDate').value||todayStr();
+  var rec;
+  if(editingId){rec=DB.records.find(function(r){return r.id===editingId;});}
+  else{rec={id:uid(),vid:veh().id};DB.records.push(rec);}
+  rec.date=date;rec.kind=$('fKind').value;rec.odo=odo;rec.energy=energy;rec.cost=cost;
+  rec.soc=useSoc;rec.s0=s0;rec.s1=s1;
+  rec.loc=$('fLoc').value.trim();rec.note=$('fNote').value.trim();
+  save();closeSheets();renderAll();
+}
+
+/* SECTION: detail */
+function openDetail(id){
+  var ms=metrics(),m=null;
+  for(var i=0;i<ms.length;i++)if(ms[i].r.id===id)m=ms[i];
+  if(!m)return;
+  var b=$('detailBody');b.innerHTML='';
+  b.appendChild(kv('日期',dlabel(m.r.date)));
+  b.appendChild(kv('方式',(KINDS[m.r.kind]||KINDS.fast).n));
+  b.appendChild(kv('里程表',n1(m.r.odo)+' km'));
+  b.appendChild(kv('补能电量',n1(m.energy)+' kWh'+(m.est?'（按 SOC 估算）':'')));
+  b.appendChild(kv('花费',money(m.r.cost)));
+  b.appendChild(kv('行驶里程',m.invalid?'无法计算':n1(m.dist)+' km'));
+  b.appendChild(kv('百公里电耗',m.cons!=null?n1(m.cons)+' kWh':'—'));
+  b.appendChild(kv('每公里电费',m.cpk!=null?n3(m.cpk)+' 元':'—'));
+  if(m.r.cost>0&&m.energy>0)b.appendChild(kv('实际电价',n2(m.r.cost/m.energy)+' 元/kWh'));
+  if(m.r.loc)b.appendChild(kv('地点',m.r.loc));
+  if(m.r.note)b.appendChild(kv('备注',m.r.note));
+  $('btnEditRec').onclick=function(){openForm(m.r);};
+  $('btnDelRec').onclick=function(){
+    if(confirm('删除这条记录？')){
+      DB.records=DB.records.filter(function(r){return r.id!==m.r.id;});
+      save();closeSheets();renderAll();
+    }
+  };
+  $('mask').classList.add('open');$('detailSheet').classList.add('open');
+}
+function kv(k,v){
+  var row=el('div','');
+  row.style.cssText='display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid #F0F3F1;font-size:14px';
+  row.appendChild(el('span','muted',k));
+  var val=el('span','num',v);val.style.textAlign='right';
+  row.appendChild(val);return row;
+}
+
+/* SECTION: bill form */
+var editingBillId=null, billImgData='';
+function openBillForm(bill){
+  editingBillId=bill?bill.id:null;billImgData=bill?bill.img||'':'';
+  $('billSheetTitle').textContent=bill?'编辑电费账单':'记电费账单';
+  $('bMonth').value=bill?bill.month:todayStr().slice(0,7);
+  $('bEnergy').value=bill?bill.energy:'';
+  $('bCost').value=bill?bill.cost:'';
+  $('bPeak').value=bill&&bill.peak?bill.peak:'';
+  $('bValley').value=bill&&bill.valley?bill.valley:'';
+  $('bLoc').value=bill?bill.loc||'':'国家电网';
+  $('bNote').value=bill?bill.note||'':'';
+  $('bImg').value='';
+  var pv=$('bImgPrev');
+  if(billImgData){pv.src=billImgData;pv.style.display='block';}else{pv.style.display='none';pv.removeAttribute('src');}
+  updateBillTip();
+  $('detailSheet').classList.remove('open');$('billDetailSheet').classList.remove('open');
+  $('mask').classList.add('open');$('billSheet').classList.add('open');
+}
+function updateBillTip(){
+  var e=parseFloat($('bEnergy').value),c=parseFloat($('bCost').value),tip=$('billTip');
+  if(e>0&&c>0){tip.style.display='block';tip.textContent='平均电价 '+n3(c/e)+' 元/kWh（峰谷填了会分别校验）';}
+  else tip.style.display='none';
+}
+function saveBill(){
+  var month=$('bMonth').value;
+  var energy=parseFloat($('bEnergy').value);
+  var cost=parseFloat($('bCost').value);
+  if(!month){alert('请选择账单月份');return;}
+  if(isNaN(energy)||energy<=0){alert('请填写本期电量');return;}
+  if(isNaN(cost)||cost<0){alert('请填写本期电费');return;}
+  var peak=parseFloat($('bPeak').value)||0,valley=parseFloat($('bValley').value)||0;
+  if(peak+valley>energy*1.5){alert('峰谷电量明显大于本期电量，请检查');return;}
+  var b;
+  if(editingBillId){b=DB.bills.find(function(x){return x.id===editingBillId;});}
+  else{b={id:uid(),vid:veh().id};DB.bills.push(b);}
+  b.month=month;b.energy=energy;b.cost=cost;b.price=cost/energy;
+  b.peak=peak;b.valley=valley;
+  b.loc=$('bLoc').value.trim();b.note=$('bNote').value.trim();
+  b.img=billImgData;
+  save();closeSheets();renderAll();
+}
+function openBillDetail(id){
+  var b=null;bills().forEach(function(x){if(x.id===id)b=x;});
+  if(!b)return;
+  var body=$('billDetailBody');body.innerHTML='';
+  body.appendChild(kv('账单月份',mlabel(b.month)));
+  body.appendChild(kv('本期电量',n1(b.energy)+' kWh'));
+  body.appendChild(kv('本期电费',money(b.cost)));
+  body.appendChild(kv('平均电价',n3(b.cost/Math.max(b.energy,0.001))+' 元/kWh'));
+  if(b.peak>0)body.appendChild(kv('高峰电量',n1(b.peak)+' kWh'));
+  if(b.valley>0)body.appendChild(kv('低谷电量',n1(b.valley)+' kWh'));
+  if(b.loc)body.appendChild(kv('户号/地点',b.loc));
+  if(b.note)body.appendChild(kv('备注',b.note));
+  if(b.img){
+    var img=document.createElement('img');img.alt='账单截图';
+    img.style.cssText='width:100%;border-radius:10px;margin-top:10px';
+    img.src=b.img;body.appendChild(img);
+  }
+  $('btnEditBill').onclick=function(){openBillForm(b);};
+  $('btnDelBill').onclick=function(){
+    if(confirm('删除这条电费账单？')){
+      DB.bills=DB.bills.filter(function(x){return x.id!==b.id;});
+      save();closeSheets();renderAll();
+    }
+  };
+  $('mask').classList.add('open');$('billDetailSheet').classList.add('open');
+}
+
+/* SECTION: csv 备份 */
+function toCSV(){
+  var lines=[];
+  lines.push(['类型','日期','充电方式','里程表读数km','充电电量kWh','花费元','用SOC估算','充电前%','充电后%','地点','备注'].join(','));
+  recs().slice().sort(function(a,b){return a.date<b.date?-1:1;}).forEach(function(r){
+    lines.push(['充电',r.date,(KINDS[r.kind]||{n:r.kind}).n,r.odo,r.energy,r.cost,r.soc?'是':'否',r.s0||'',r.s1||'',r.loc||'',(r.note||'').replace(/[\r\n,]/g,' ')].join(','));
+  });
+  lines.push('');
+  lines.push(['类型','账单月份','本期电量kWh','本期电费元','高峰kWh','低谷kWh','户号地点','备注'].join(','));
+  bills().slice().sort(function(a,b){return a.month<b.month?-1:1;}).forEach(function(b){
+    lines.push(['电费账单',b.month,b.energy,b.cost,b.peak||'',b.valley||'',(b.loc||'').replace(/,/g,' '),(b.note||'').replace(/[\r\n,]/g,' ')].join(','));
+  });
+  return lines.join('\r\n');
+}
+function exportCSV(){
+  if(!recs().length&&!bills().length){alert('还没有记录可导出');return;}
+  var blob=new Blob(['\ufeff'+toCSV()],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='电车记账备份-'+todayStr()+'.csv';
+  document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},2000);
+}
+function importCSV(text){
+  var lines=text.replace(/^\ufeff/,'').split(/\r?\n/).filter(function(l){return l.trim();});
+  if(lines.length<2){alert('文件里没有数据行');return;}
+  var mode='charge',added=0,billAdded=0;
+  for(var i=0;i<lines.length;i++){
+    var c=lines[i].split(',');
+    if(c[0]==='类型'){
+      if(lines[i].indexOf('账单月份')>=0)mode='bill';
+      else if(lines[i].indexOf('里程表')>=0)mode='charge';
+      continue;
+    }
+    if(mode==='bill'){
+      if(c.length<4)continue;
+      if(!/^\d{4}-\d{2}$/.test(c[1]))continue;
+      var e2=parseFloat(c[2]),k2=parseFloat(c[3]);
+      if(isNaN(e2)||e2<=0||isNaN(k2))continue;
+      DB.bills.push({id:uid(),vid:veh().id,month:c[1],energy:e2,cost:k2,price:k2/e2,
+        peak:parseFloat(c[4])||0,valley:parseFloat(c[5])||0,loc:c[6]||'',note:c[7]||'',img:''});
+      billAdded++;continue;
+    }
+    if(c.length<6)continue;
+    if(c[0]!=='充电')continue;
+    var odo=parseFloat(c[3]),energy=parseFloat(c[4])||0,cost=parseFloat(c[5])||0;
+    if(!/^\d{4}-\d{2}-\d{2}/.test(c[1])||isNaN(odo))continue;
+    var kind='fast';
+    for(var k in KINDS){if(KINDS[k].n===c[2])kind=k;}
+    DB.records.push({
+      id:uid(),vid:veh().id,date:c[1].slice(0,10),kind:kind,odo:odo,energy:energy,cost:cost,
+      soc:c[6]==='是',s0:parseFloat(c[7])||0,s1:parseFloat(c[8])||0,
+      loc:c[9]||'',note:c[10]||''
+    });
+    added++;
+  }
+  if(added||billAdded){save();renderAll();alert('已导入 '+added+' 条充电记录、'+billAdded+' 条电费账单');}
+  else alert('没解析出有效数据，请确认是本 App 导出的备份文件');
+}
+
+/* SECTION: events & init */
+function renderAll(){renderRecords();renderStats();renderBills();renderMine();updateHeader();}
+function updateHeader(){
+  var v=veh();
+  $('hdrTitle').textContent=v.name||'电车记账';
+}
+function showPage(name){
+  var pages=document.querySelectorAll('.page');
+  for(var i=0;i<pages.length;i++)pages[i].classList.remove('active');
+  $('page-'+name).classList.add('active');
+  var btns=document.querySelectorAll('#tabbar button');
+  for(var j=0;j<btns.length;j++)btns[j].classList.toggle('on',btns[j].dataset.page===name);
+  $('btnAdd').style.display=name==='records'?'block':'none';
+}
+document.addEventListener('DOMContentLoaded',function(){
+  load();renderAll();
+  $('tabbar').addEventListener('click',function(ev){
+    var b=ev.target.closest('button');if(b)showPage(b.dataset.page);
+  });
+  $('btnAdd').addEventListener('click',function(){
+    $('typeSheet').classList.add('open');$('mask').classList.add('open');
+  });
+  $('typeClose').addEventListener('click',closeSheets);
+  $('pickCharge').addEventListener('click',function(){closeSheets();openForm(null);});
+  $('pickBill').addEventListener('click',function(){closeSheets();openBillForm(null);});
+  $('billClose').addEventListener('click',closeSheets);
+  $('billDetailClose').addEventListener('click',closeSheets);
+  $('btnSaveBill').addEventListener('click',saveBill);
+  $('bEnergy').addEventListener('input',updateBillTip);
+  $('bCost').addEventListener('input',updateBillTip);
+  $('bImg').addEventListener('change',function(ev){
+    var f=ev.target.files[0];if(!f)return;
+    var fr=new FileReader();
+    fr.onload=function(){
+      var img=new Image();
+      img.onload=function(){
+        // 压缩到最长边 1000px 再存，避免撑爆浏览器存储
+        var scale=Math.min(1,1000/Math.max(img.width,img.height));
+        var cv=document.createElement('canvas');
+        cv.width=Math.round(img.width*scale);cv.height=Math.round(img.height*scale);
+        cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+        billImgData=cv.toDataURL('image/jpeg',0.72);
+        var pv=$('bImgPrev');pv.src=billImgData;pv.style.display='block';
+      };
+      img.src=String(fr.result);
+    };
+    fr.readAsDataURL(f);
+  });
+  $('recClose').addEventListener('click',closeSheets);
+  $('detailClose').addEventListener('click',closeSheets);
+  $('mask').addEventListener('click',closeSheets);
+  $('btnSaveRec').addEventListener('click',saveRec);
+  $('fUseSOC').addEventListener('change',toggleSoc);
+  $('fEnergy').addEventListener('input',updateTip);
+  $('fCost').addEventListener('input',updateTip);
+  $('btnSaveSettings').addEventListener('click',function(){
+    var v=veh();
+    v.name=$('setVehName').value.trim()||'我的电车';
+    v.battery=parseFloat($('setBattery').value)||0;
+    v.price=parseFloat($('setPrice').value)||0;
+    v.startOdo=parseFloat($('setStartOdo').value)||0;
+    save();renderAll();alert('已保存');
+  });
+  $('btnExport').addEventListener('click',exportCSV);
+  $('btnImport').addEventListener('click',function(){$('fileImport').click();});
+  $('fileImport').addEventListener('change',function(ev){
+    var f=ev.target.files[0];if(!f)return;
+    var fr=new FileReader();
+    fr.onload=function(){importCSV(String(fr.result));};
+    fr.readAsText(f,'utf-8');ev.target.value='';
+  });
+  $('btnClear').addEventListener('click',function(){
+    if(confirm('确定清空全部记录？建议先导出备份。')){
+      if(confirm('再次确认：清空后无法恢复')){
+        DB.records=[];DB.bills=[];save();renderAll();showPage('records');
+      }
+    }
+  });
+  $('usageText').textContent='1. 每次充完电点右下角「＋」→「记充电」，填里程表读数、充电量和实付金额；行驶里程 = 本次读数 − 上次读数，电耗和每公里成本自动算。\n2. 每月收到国家电网账单：点「＋」→「记家电电费账单」，填本期电量和电费，可附上账单截图存底；家充电费会自动并入月度账单和每公里成本。\n3. 想让 AI 帮你识别账单截图：把截图发给千问Go!，它会识别数据并生成 CSV，你在「账单」页点「导入备份」即可一键录入。\n4. 建议先在「车辆」页填电池容量和起点里程；每月导出一次 CSV 备份，防止清理浏览器数据时丢失。\n5. 装成 App：iPhone 用 Safari 打开本页 → 分享 → 添加到主屏幕；安卓用 Chrome 菜单 → 安装应用/添加到主屏幕。';
+  $('usageText').style.whiteSpace='pre-line';
+});
+</script>
+</body>
+</html>
