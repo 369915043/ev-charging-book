@@ -246,6 +246,7 @@ h2.sec{font-size:17px;margin:18px 16px 10px}
       <div class="row"><label>账单月份</label><input type="month" id="bMonth"></div>
       <div class="row"><label>本期电量</label><input type="number" id="bEnergy" inputmode="decimal" placeholder="账单上的本期电量"><span class="unit">kWh</span></div>
       <div class="row"><label>本期电费</label><input type="number" id="bCost" inputmode="decimal" placeholder="账单上的本期电费"><span class="unit">元</span></div>
+      <div class="row"><label>本期行驶</label><input type="number" id="bDist" inputmode="decimal" placeholder="车机月统计或月末−月初读数"><span class="unit">km</span></div>
       <div class="row"><label>高峰电量</label><input type="number" id="bPeak" inputmode="decimal" placeholder="选填"><span class="unit">kWh</span></div>
       <div class="row"><label>低谷电量</label><input type="number" id="bValley" inputmode="decimal" placeholder="选填"><span class="unit">kWh</span></div>
       <div class="row"><label>账单截图</label><input type="file" id="bImg" accept="image/*"></div>
@@ -336,28 +337,44 @@ function summary(ms){
   var bs=bills();
   for(var j=0;j<bs.length;j++){s.billCost+=bs[j].cost;s.billEnergy+=bs[j].energy;}
   s.billN=bs.length;
+  // 账单自带本期行驶里程：与外部充电记录里程按月去重后并入
+  var chDist={},chCost={},chEnergy={};
+  for(var q=0;q<ms.length;q++){chDist[ms[q].r.date.slice(0,7)]=1;}
+  var billDist=0,billDistOnly=0;
+  for(var k2=0;k2<bs.length;k2++){
+    var bd=bs[k2].dist||0;
+    billDist+=bd;
+    if(!chDist[bs[k2].month])billDistOnly+=bd; // 纯家充月才补里程
+  }
+  s.dist+=billDistOnly;
+  s.billDist=billDist;
   s.total=s.cost+s.billCost;
-  s.cons=s.dist>0&&s.energy>0?s.energy/s.dist*100:null;
+  var totEnergy=s.energy;
+  for(var k3=0;k3<bs.length;k3++){if(!chDist[bs[k3].month])totEnergy+=bs[k3].energy;}
+  s.cons=s.dist>0&&totEnergy>0?totEnergy/s.dist*100:null;
   s.cpk=s.dist>0&&s.total>0?s.total/s.dist:null;
   var v=veh();s.range=(s.cons&&v.battery>0)?v.battery/s.cons*100:null;
   return s;
 }
 function monthBuckets(ms){
   var map={},keys=[];
-  function key(k){if(!map[k]){map[k]={energy:0,cost:0,dist:0,billEnergy:0,billCost:0};keys.push(k);}}
+  function key(k){if(!map[k]){map[k]={energy:0,cost:0,dist:0,billEnergy:0,billCost:0,billDist:0};keys.push(k);}}
   for(var i=0;i<ms.length;i++){
     var k=ms[i].r.date.slice(0,7);key(k);
     map[k].energy+=ms[i].energy;map[k].cost+=ms[i].r.cost;map[k].dist+=ms[i].dist;
   }
   bills().forEach(function(b){
-    key(b.month);map[b.month].billEnergy+=b.energy;map[b.month].billCost+=b.cost;
+    key(b.month);map[b.month].billEnergy+=b.energy;map[b.month].billCost+=b.cost;map[b.month].billDist+=(b.dist||0);
   });
   keys.sort();
   return keys.map(function(k){
     var m=map[k];
-    return {k:k,energy:m.energy,cost:m.cost,dist:m.dist,billEnergy:m.billEnergy,billCost:m.billCost,
+    // 该月若无外部充电记录里程，则用账单本期行驶里程补上
+    var dist=m.dist>0?m.dist:m.billDist;
+    var energy=m.energy>0?m.energy:m.billEnergy;
+    return {k:k,energy:m.energy,cost:m.cost,dist:dist,billEnergy:m.billEnergy,billCost:m.billCost,billDist:m.billDist,
       total:m.cost+m.billCost,
-      cons:(m.dist>0&&m.energy>0)?m.energy/m.dist*100:null};
+      cons:(dist>0&&energy>0)?energy/dist*100:null};
   });
 }
 
@@ -435,6 +452,7 @@ function billRow(b){
   l1.appendChild(el('span','tag','家电账单'));
   mid.appendChild(l1);
   var parts=[n1(b.energy)+' kWh'];
+  if(b.dist>0)parts.push(n1(b.dist)+' km');
   if(b.price>0)parts.push('电价 '+n3(b.price)+' 元/kWh');
   if(b.valley>0)parts.push('低谷占'+Math.round(b.valley/Math.max(b.energy,0.001)*100)+'%');
   if(b.loc)parts.push(b.loc);
@@ -728,6 +746,7 @@ function openBillForm(bill){
   $('bMonth').value=bill?bill.month:todayStr().slice(0,7);
   $('bEnergy').value=bill?bill.energy:'';
   $('bCost').value=bill?bill.cost:'';
+  $('bDist').value=bill&&bill.dist?bill.dist:'';
   $('bPeak').value=bill&&bill.peak?bill.peak:'';
   $('bValley').value=bill&&bill.valley?bill.valley:'';
   $('bLoc').value=bill?bill.loc||'':'国家电网';
@@ -752,11 +771,12 @@ function saveBill(){
   if(isNaN(energy)||energy<=0){alert('请填写本期电量');return;}
   if(isNaN(cost)||cost<0){alert('请填写本期电费');return;}
   var peak=parseFloat($('bPeak').value)||0,valley=parseFloat($('bValley').value)||0;
+  var dist=parseFloat($('bDist').value)||0;
   if(peak+valley>energy*1.5){alert('峰谷电量明显大于本期电量，请检查');return;}
   var b;
   if(editingBillId){b=DB.bills.find(function(x){return x.id===editingBillId;});}
   else{b={id:uid(),vid:veh().id};DB.bills.push(b);}
-  b.month=month;b.energy=energy;b.cost=cost;b.price=cost/energy;
+  b.month=month;b.energy=energy;b.cost=cost;b.price=cost/energy;b.dist=dist;
   b.peak=peak;b.valley=valley;
   b.loc=$('bLoc').value.trim();b.note=$('bNote').value.trim();
   b.img=billImgData;
@@ -770,6 +790,11 @@ function openBillDetail(id){
   body.appendChild(kv('本期电量',n1(b.energy)+' kWh'));
   body.appendChild(kv('本期电费',money(b.cost)));
   body.appendChild(kv('平均电价',n3(b.cost/Math.max(b.energy,0.001))+' 元/kWh'));
+  if(b.dist>0){
+    body.appendChild(kv('本期行驶',n1(b.dist)+' km'));
+    body.appendChild(kv('百公里电耗',n1(b.energy/Math.max(b.dist,0.001)*100)+' kWh/100km'));
+    body.appendChild(kv('每公里电费',n3(b.cost/b.dist)+' 元/km'));
+  }
   if(b.peak>0)body.appendChild(kv('高峰电量',n1(b.peak)+' kWh'));
   if(b.valley>0)body.appendChild(kv('低谷电量',n1(b.valley)+' kWh'));
   if(b.loc)body.appendChild(kv('户号/地点',b.loc));
@@ -797,9 +822,9 @@ function toCSV(){
     lines.push(['充电',r.date,(KINDS[r.kind]||{n:r.kind}).n,r.odo,r.energy,r.cost,r.soc?'是':'否',r.s0||'',r.s1||'',r.loc||'',(r.note||'').replace(/[\r\n,]/g,' ')].join(','));
   });
   lines.push('');
-  lines.push(['类型','账单月份','本期电量kWh','本期电费元','高峰kWh','低谷kWh','户号地点','备注'].join(','));
+  lines.push(['类型','账单月份','本期电量kWh','本期电费元','本期行驶km','高峰kWh','低谷kWh','户号地点','备注'].join(','));
   bills().slice().sort(function(a,b){return a.month<b.month?-1:1;}).forEach(function(b){
-    lines.push(['电费账单',b.month,b.energy,b.cost,b.peak||'',b.valley||'',(b.loc||'').replace(/,/g,' '),(b.note||'').replace(/[\r\n,]/g,' ')].join(','));
+    lines.push(['电费账单',b.month,b.energy,b.cost,b.dist||'',b.peak||'',b.valley||'',(b.loc||'').replace(/,/g,' '),(b.note||'').replace(/[\r\n,]/g,' ')].join(','));
   });
   return lines.join('\r\n');
 }
@@ -814,11 +839,11 @@ function exportCSV(){
 function importCSV(text){
   var lines=text.replace(/^\ufeff/,'').split(/\r?\n/).filter(function(l){return l.trim();});
   if(lines.length<2){alert('文件里没有数据行');return;}
-  var mode='charge',added=0,billAdded=0;
+  var mode='charge',added=0,billAdded=0,billDistCol=false;
   for(var i=0;i<lines.length;i++){
     var c=lines[i].split(',');
     if(c[0]==='类型'){
-      if(lines[i].indexOf('账单月份')>=0)mode='bill';
+      if(lines[i].indexOf('账单月份')>=0){mode='bill';billDistCol=lines[i].indexOf('本期行驶')>=0;}
       else if(lines[i].indexOf('里程表')>=0)mode='charge';
       continue;
     }
@@ -827,8 +852,11 @@ function importCSV(text){
       if(!/^\d{4}-\d{2}$/.test(c[1]))continue;
       var e2=parseFloat(c[2]),k2=parseFloat(c[3]);
       if(isNaN(e2)||e2<=0||isNaN(k2))continue;
-      DB.bills.push({id:uid(),vid:veh().id,month:c[1],energy:e2,cost:k2,price:k2/e2,
-        peak:parseFloat(c[4])||0,valley:parseFloat(c[5])||0,loc:c[6]||'',note:c[7]||'',img:''});
+      var dist2,peak2,valley2,loc2,note2;
+      if(billDistCol){dist2=parseFloat(c[4])||0;peak2=parseFloat(c[5])||0;valley2=parseFloat(c[6])||0;loc2=c[7]||'';note2=c[8]||'';}
+      else{dist2=0;peak2=parseFloat(c[4])||0;valley2=parseFloat(c[5])||0;loc2=c[6]||'';note2=c[7]||'';}
+      DB.bills.push({id:uid(),vid:veh().id,month:c[1],energy:e2,cost:k2,price:k2/e2,dist:dist2,
+        peak:peak2,valley:valley2,loc:loc2,note:note2,img:''});
       billAdded++;continue;
     }
     if(c.length<6)continue;
@@ -926,7 +954,7 @@ document.addEventListener('DOMContentLoaded',function(){
       }
     }
   });
-  $('usageText').textContent='1. 每次充完电点右下角「＋」→「记充电」，填里程表读数、充电量和实付金额；行驶里程 = 本次读数 − 上次读数，电耗和每公里成本自动算。\n2. 每月收到国家电网账单：点「＋」→「记家电电费账单」，填本期电量和电费，可附上账单截图存底；家充电费会自动并入月度账单和每公里成本。\n3. 想让 AI 帮你识别账单截图：把截图发给千问Go!，它会识别数据并生成 CSV，你在「账单」页点「导入备份」即可一键录入。\n4. 建议先在「车辆」页填电池容量和起点里程；每月导出一次 CSV 备份，防止清理浏览器数据时丢失。\n5. 装成 App：iPhone 用 Safari 打开本页 → 分享 → 添加到主屏幕；安卓用 Chrome 菜单 → 安装应用/添加到主屏幕。';
+  $('usageText').textContent='1. 每次充完电点右下角「＋」→「记充电」，填里程表读数、充电量和实付金额；行驶里程 = 本次读数 − 上次读数，电耗和每公里成本自动算。\n2. 每月国家电网账单：点「＋」→「记家电电费账单」，填本期电量、电费和【本期行驶里程】（车机月度统计，或月末读数 − 月初读数）。填了里程，家充月份也能算百公里电耗和每公里电费，并自动并入账单统计。\n3. 想让 AI 帮你识别账单截图：把截图发给千问Go!，它会识别数据并生成 CSV，你在「账单」页点「导入备份」即可一键录入。\n4. 建议先在「车辆」页填电池容量和起点里程；每月导出一次 CSV 备份，防止清理浏览器数据时丢失。\n5. 装成 App：iPhone 用 Safari 打开本页 → 分享 → 添加到主屏幕；之后固定从桌面图标进入，别和 Safari 混用（两者数据独立）。';
   $('usageText').style.whiteSpace='pre-line';
 });
 </script>
